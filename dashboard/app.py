@@ -173,7 +173,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
 .pulse-h {{ font-size: 14px; font-weight: 700; color: var(--text); margin: 3px 0 2px; letter-spacing: -.01em; }}
 .pulse-sub {{ font-size: 12px; color: var(--muted); margin-bottom: 10px; }}
 
-.badge {{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:650; padding:4px 9px; border-radius:999px; }}
+.badge {{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:650; padding:4px 9px; border-radius:999px; margin-top:8px; }}
 .badge::before {{ content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }}
 .badge.low {{ background: rgba(63,180,122,.13); color:#3FB47A; }}
 .badge.medium {{ background: rgba(217,154,43,.14); color:#D99A2B; }}
@@ -434,24 +434,33 @@ if st.session_state.active_section != "Overview":
 with tab_overview:
     kpis = metrics.kpi_summary(df)
 
+    eng_val = kpis['Engagement Index']
+    eng_tier = "Low" if eng_val < 0.34 else ("High" if eng_val >= 0.67 else "Medium")
+    wlb_val = kpis['Work-Life Balance Index']
+    wlb_tag = "Below org avg" if wlb_val < 2.76 else ("Above org avg" if wlb_val > 2.76 else "At org avg")
+    high_risk_n = int((df["BurnoutRisk"] == "High").sum())
+    stress_n = int(((df["OverTime"] == "Yes") & (df["BusinessTravel"] == "Travel_Frequently")).sum())
+    pct_of_total = f" ({len(df) / len(df_full) * 100:.0f}% of {len(df_full):,} total)" if len(df) != len(df_full) else ""
+
     st.markdown(
         f"""
         <div class="kpi-row">
             <div class="kpi-card"><div class="kpi-label">👥 Employees</div>
                 <div class="kpi-value">{len(df):,}</div>
-                <div class="kpi-help">Employees matching current filters</div></div>
+                <div class="kpi-help">In current filtered view{pct_of_total}</div></div>
             <div class="kpi-card"><div class="kpi-label">⚡ Engagement Index</div>
-                <div class="kpi-value accent">{kpis['Engagement Index']:.3f}</div>
-                <div class="kpi-help">Composite of involvement &amp; satisfaction (0–1)</div></div>
+                <div class="kpi-value accent">{eng_val:.3f}</div>
+                <span class="badge {eng_tier.lower()}">{eng_tier} tier</span>
+                <div class="kpi-help">Mean of involvement, job, environment &amp; relationship satisfaction, normalized 0–1. Tiers: &lt;0.34 Low · 0.34–0.67 Medium · ≥0.67 High.</div></div>
             <div class="kpi-card"><div class="kpi-label">⚖️ Work-Life Balance</div>
-                <div class="kpi-value">{kpis['Work-Life Balance Index']:.2f} / 4</div>
-                <div class="kpi-help">Average balance rating</div></div>
+                <div class="kpi-value">{wlb_val:.2f} / 4</div>
+                <div class="kpi-help">{wlb_tag} (org mean 2.76). Self-reported, 1 = poor, 4 = excellent.</div></div>
             <div class="kpi-card"><div class="kpi-label">🔥 High Burnout Risk</div>
                 <div class="kpi-value risk-high">{kpis['High Burnout Risk (%)']:.1f}%</div>
-                <div class="kpi-help">Overtime + low balance + low engagement</div></div>
+                <div class="kpi-help">{high_risk_n:,} employees — overtime + low work-life balance + low engagement combined.</div></div>
             <div class="kpi-card"><div class="kpi-label">🧳 Workload Stress</div>
                 <div class="kpi-value">{kpis['Workload Stress Indicator (%)']:.1f}%</div>
-                <div class="kpi-help">Frequent travel + overtime</div></div>
+                <div class="kpi-help">{stress_n:,} employees travel frequently AND work overtime — the highest-concentration risk combo.</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -501,16 +510,20 @@ with tab_overview:
 # ---------------------------------------------------------------------
 with tab_burnout:
     risk_counts = df["BurnoutRisk"].value_counts().reindex(["Low", "Medium", "High"]).fillna(0)
+    risk_pct = (risk_counts / len(df) * 100).round(1) if len(df) else risk_counts
 
     st.markdown(
         f"""
         <div class="kpi-row">
             <div class="kpi-card"><div class="kpi-label">🟢 Low risk</div>
-                <div class="kpi-value">{int(risk_counts['Low']):,}</div></div>
+                <div class="kpi-value">{int(risk_counts['Low']):,}</div>
+                <div class="kpi-help">{risk_pct['Low']:.1f}% of filtered employees — no overtime/balance/engagement flags triggered.</div></div>
             <div class="kpi-card"><div class="kpi-label">🟡 Medium risk</div>
-                <div class="kpi-value">{int(risk_counts['Medium']):,}</div></div>
+                <div class="kpi-value">{int(risk_counts['Medium']):,}</div>
+                <div class="kpi-help">{risk_pct['Medium']:.1f}% — one risk factor present, worth monitoring.</div></div>
             <div class="kpi-card"><div class="kpi-label">🔴 High risk</div>
-                <div class="kpi-value risk-high">{int(risk_counts['High']):,}</div></div>
+                <div class="kpi-value risk-high">{int(risk_counts['High']):,}</div>
+                <div class="kpi-help">{risk_pct['High']:.1f}% — multiple factors combined; prioritize for the Manager Action Panel watchlist.</div></div>
         </div>
         """,
         unsafe_allow_html=True,
